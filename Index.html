@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>مغامرة الفارس: النسخة المتوازنة</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@700&display=swap');
+
+        /* --- إعدادات الشاشة الكاملة --- */
+        html, body {
+            margin: 0; padding: 0; background-color: #000; overflow: hidden;
+            font-family: 'Cairo', sans-serif; touch-action: none; width: 100%; height: 100%;
+            position: fixed;
+        }
+
+        #game-container {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: #000; z-index: 1;
+            display: flex; align-items: center; justify-content: center;
+        }
+
+        canvas {
+            box-shadow: 0 0 25px rgba(0,0,0,0.8);
+        }
+
+        #ui-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; z-index: 100;
+        }
+
+        /* --- شريط الحوار (القصة) --- */
+        #dialogue-box {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            width: 80%; height: 130px; background: rgba(0, 0, 0, 0.95);
+            border: 3px solid #FFD700; border-radius: 15px;
+            display: none; padding: 10px 20px; pointer-events: auto;
+            flex-direction: row; align-items: center; gap: 20px;
+            z-index: 300; box-shadow: 0 0 30px rgba(255, 215, 0, 0.5);
+        }
+        .speaker-img {
+            width: 90px; height: 90px; border-radius: 50%; border: 3px solid white;
+            background: #333; object-fit: cover; box-shadow: 0 0 10px #000;
+        }
+        .dialogue-content { flex: 1; color: white; text-align: right; }
+        .dialogue-name { color: #FFD700; font-size: 20px; margin-bottom: 8px; display: block; font-weight: bold; }
+        .dialogue-text { font-size: 18px; line-height: 1.5; color: #fff; }
+        .next-arrow { font-size: 24px; color: #00E5FF; animation: bounce 1s infinite; cursor: pointer; padding: 10px; }
+        @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(5px); } }
+
+        /* الشريط العلوي */
+        .top-bar {
+            position: absolute; top: 15px; left: 20px; display: flex; gap: 12px;
+            pointer-events: auto;
+        }
+        .icon-btn {
+            background: rgba(255, 255, 255, 0.15); border: 1px solid rgba(255, 255, 255, 0.4);
+            width: 40px; height: 40px; border-radius: 50%; font-size: 20px;
+            display: flex; align-items: center; justify-content: center; cursor: pointer;
+            color: white; backdrop-filter: blur(4px); transition: 0.2s;
+        }
+        .icon-btn:active { transform: scale(0.9); border-color: #FFD700; background: rgba(255, 215, 0, 0.3); }
+
+        .hud {
+            position: absolute; top: 15px; right: 20px; width: auto;
+            display: flex; gap: 15px; color: white;
+            font-size: clamp(14px, 3.5vw, 20px); text-shadow: 2px 2px 0 #000;
+            font-weight: bold; pointer-events: none;
+        }
+
+        #boss-hud {
+            position: absolute; top: 60px; left: 50%; transform: translateX(-50%); width: 50%;
+            display: none; flex-direction: column; align-items: center; text-shadow: 2px 2px 0 #000;
+        }
+        .boss-bar-bg { width: 100%; height: 15px; background: #222; border: 2px solid #fff; border-radius: 8px; overflow: hidden; }
+        .boss-bar-fill { width: 100%; height: 100%; background: linear-gradient(to right, #ff4444, #b71c1c); transition: width 0.2s; }
+
+        /* القوائم والشاشات */
+        .screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.9); display: flex; flex-direction: column;
+            align-items: center; justify-content: center; color: white; z-index: 200;
+            pointer-events: auto; text-align: center; backdrop-filter: blur(8px);
+            transition: opacity 0.3s;
+        }
+        .hidden { display: none !important; }
+
+        h1 { font-size: clamp(28px, 6vw, 50px); margin: 10px 0; color: #FFD700; text-shadow: 4px 4px 0 #000; }
+        .credit { font-size: clamp(12px, 3vw, 18px); color: #00E5FF; margin-bottom: 25px; }
+
+        /* الخريطة */
+        #map-wrapper { width: 90%; height: 85%; display: flex; justify-content: center; align-items: center; position: relative; }
+        #map-container {
+            position: relative; width: 100%; max-width: 800px; aspect-ratio: 16/9;
+            background-image: url('https://i.ibb.co/M5c5cXXv/Picsart-25-12-19-17-33-37-416.jpg');
+            background-size: cover; background-position: center;
+            border: 3px solid #FFD700; border-radius: 15px; box-shadow: 0 0 25px rgba(255, 215, 0, 0.3);
+        }
+        .map-level-btn {
+            position: absolute; width: 35px; height: 35px;
+            background: linear-gradient(to bottom, #4CAF50, #2E7D32);
+            border: 2px solid white; border-radius: 8px; color: white;
+            font-weight: bold; font-family: 'Cairo', sans-serif; font-size: 16px;
+            cursor: pointer; transform: translate(-50%, -50%);
+            box-shadow: 0 3px 6px rgba(0,0,0,0.6);
+        }
+        .map-level-btn:hover { transform: translate(-50%, -50%) scale(1.2); background: #FFD700; color: #000; z-index: 10; }
+        .map-level-btn.boss-lvl { background: linear-gradient(to bottom, #ff4444, #d32f2f); width: 45px; height: 45px; font-size: 20px; }
+
+        #lvl1 { top: 85%; left: 15%; } #lvl2 { top: 70%; left: 25%; } #lvl3 { top: 60%; left: 40%; } #lvl4 { top: 45%; left: 30%; } #lvl5 { top: 30%; left: 45%; }
+        #lvl6 { top: 40%; left: 60%; } #lvl7 { top: 55%; left: 75%; } #lvl8 { top: 35%; left: 85%; } #lvl9 { top: 20%; left: 70%; } #lvl10 { top: 15%; left: 20%; }
+
+        .main-menu-buttons { display: flex; gap: 20px; justify-content: center; margin-top: 25px; }
+        .main-btn {
+            background: linear-gradient(to bottom, #FFD700, #FFA000); border: 2px solid #fff; 
+            padding: 8px 30px; color: #000; font-size: clamp(16px, 3.5vw, 20px);
+            font-weight: bold; font-family: 'Cairo', sans-serif; border-radius: 30px;
+            cursor: pointer; min-width: 140px; box-shadow: 0 4px 15px rgba(255, 215, 0, 0.5);
+            transition: transform 0.2s;
+        }
+        .main-btn:active { transform: scale(0.95); }
+        .main-btn.secondary { background: linear-gradient(to bottom, #2196F3, #1976D2); color: white; box-shadow: 0 4px 15px rgba(33, 150, 243, 0.5); }
+        .main-btn.danger { background: linear-gradient(to bottom, #f44336, #d32f2f); color: white; box-shadow: 0 4px 15px rgba(244, 67, 54, 0.5); }
+        button.back-btn { position: absolute; top: -50px; left: 0; background: #ff4444; color: white; border: 2px solid white; padding: 6px 20px; font-family: 'Cairo', sans-serif; cursor: pointer; border-radius: 20px; font-weight: bold; font-size: 16px; }
+
+        /* --- تحكمات اللمس --- */
+        .controls {
+            pointer-events: auto; display: flex; justify-content: space-between;
+            position: absolute; bottom: 15px; left: 0; width: 100%; 
+            padding: 0 20px; box-sizing: border-box; z-index: 150;
+        }
+        @media (min-width: 1024px) { .controls { display: none; } }
+
+        .d-pad, .action-pad { display: flex; gap: 15px; align-items: flex-end; }
+        
+        .touch-btn {
+            width: clamp(55px, 12vw, 75px); 
+            height: clamp(55px, 12vw, 75px);
+            background: rgba(255, 255, 255, 0.1); 
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            color: white; font-size: 24px; user-select: none; backdrop-filter: blur(2px);
+            transition: transform 0.1s;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+        .touch-btn:active, .touch-btn.pressed { background: rgba(255, 215, 0, 0.25); transform: scale(0.9); border-color: #FFD700; box-shadow: 0 0 10px #FFD700; }
+        .btn-attack { background: rgba(255, 50, 50, 0.15); border-color: rgba(255, 80, 80, 0.4); }
+        .btn-jump { background: rgba(50, 255, 50, 0.15); border-color: rgba(80, 255, 80, 0.4); }
+
+        #rotate-message {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #202028; color: white; z-index: 999; flex-direction: column;
+            align-items: center; justify-content: center; text-align: center;
+        }
+        @media screen and (orientation: portrait) { #rotate-message { display: flex; } }
+    </style>
+</head>
+<body>
+
+    <div id="rotate-message">
+        <h1>🔄 اقلب الموبايل</h1>
+        <p>عشان تستمتع باللعبة، لازم الشاشة تكون بالعرض!</p>
+    </div>
+
+    <div id="game-container">
+        <canvas id="gameCanvas"></canvas>
+    </div>
+
+    <div id="ui-layer">
+        
+        <div class="top-bar">
+            <button class="icon-btn" id="sound-btn" onclick="toggleMute()">🔊</button>
+            <button class="icon-btn" id="pause-btn" onclick="togglePause()">⏸️</button>
+        </div>
+
+        <div class="hud">
+            <span id="score-display">0 💰</span>
+            <span id="level-display">م: 1</span>
+            <span id="health-display">❤️❤️❤️</span>
+        </div>
+
+        <div id="boss-hud">
+            <span style="color: #ff4444; font-weight: bold; margin-bottom: 5px;">🔥 التنين الأسطوري 🔥</span>
+            <div class="boss-bar-bg">
+                <div class="boss-bar-fill" id="boss-health-fill"></div>
+            </div>
+        </div>
+
+        <!-- صندوق الحوار -->
+        <div id="dialogue-box" onclick="nextDialogue()">
+            <img src="" id="speaker-img" class="speaker-img">
+            <div class="dialogue-content">
+                <span id="speaker-name" class="dialogue-name"></span>
+                <span id="dialogue-text" class="dialogue-text"></span>
+            </div>
+            <div class="next-arrow">▼</div>
+        </div>
+
+        <div id="main-menu" class="screen">
+            <h1>⚔️ مغامرة الفارس ⚔️</h1>
+            <h2 class="credit">برمجة: أحمد عبد الوهاب</h2>
+            <div class="main-menu-buttons">
+                <button class="main-btn" onclick="startGame(1)">ابدأ اللعب ▶️</button>
+                <button class="main-btn secondary" onclick="showMapScreen()">المراحل 🗺️</button>
+            </div>
+        </div>
+
+        <div id="pause-menu" class="screen hidden">
+            <h1 style="color: #FFA000">⏸️ اللعبة متوقفة</h1>
+            <div class="main-menu-buttons" style="flex-direction: column;">
+                <button class="main-btn" onclick="togglePause()">اكمل اللعب ▶️</button>
+                <button class="main-btn danger" onclick="returnToMenu()">خروج للقائمة 🏠</button>
+            </div>
+        </div>
+
+        <div id="map-screen" class="screen hidden">
+            <div id="map-wrapper">
+                <button class="back-btn" onclick="showMainMenu()">↩️ رجوع</button>
+                <div id="map-container">
+                    <button id="lvl1" class="map-level-btn" onclick="startGame(1)">1</button>
+                    <button id="lvl2" class="map-level-btn" onclick="startGame(2)">2</button>
+                    <button id="lvl3" class="map-level-btn" onclick="startGame(3)">3</button>
+                    <button id="lvl4" class="map-level-btn" onclick="startGame(4)">4</button>
+                    <button id="lvl5" class="map-level-btn" onclick="startGame(5)">5</button>
+                    <button id="lvl6" class="map-level-btn" onclick="startGame(6)">6</button>
+                    <button id="lvl7" class="map-level-btn" onclick="startGame(7)">7</button>
+                    <button id="lvl8" class="map-level-btn" onclick="startGame(8)">8</button>
+                    <button id="lvl9" class="map-level-btn" onclick="startGame(9)">9</button>
+                    <button id="lvl10" class="map-level-btn boss-lvl" onclick="startGame(10)">10</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="level-screen" class="screen hidden">
+            <h1 style="color: #4CAF50">عاش يا بطل! 🎉</h1>
+            <p id="level-msg">المرحلة التالية...</p>
+            <button class="main-btn" onclick="nextLevel()">كمل اللعب ⏭️</button>
+        </div>
+
+        <div id="game-over-screen" class="screen hidden">
+            <h1 style="color: #ff4444">💀 هارد لك!</h1>
+            <button class="main-btn" onclick="returnToMenu()">حاول تاني 🔄</button>
+        </div>
+
+        <div id="win-screen" class="screen hidden">
+            <h1 style="color: #FFD700">👑 ختمت اللعبة!</h1>
+            <p>أنت أسطورة حقيقية وحررت القلعة!</p>
+            <h2 style="color: #00E5FF; margin-top: 10px; font-size: 24px; animation: pulse 2s infinite;">✨ انتظروا الجزء الثاني ✨</h2>
+            <style>@keyframes pulse { 0% { transform: scale(1); opacity: 0.8; } 50% { transform: scale(1.1); opacity: 1; } 100% { transform: scale(1); opacity: 0.8; } }</style>
+            <button class="main-btn" onclick="returnToMenu()">القائمة 🏠</button>
+        </div>
+
+        <div class="controls" id="touch-controls">
+            <div class="d-pad">
+                <div class="touch-btn" id="btn-left">⬅️</div>
+                <div class="touch-btn" id="btn-right">➡️</div>
+            </div>
+            <div class="action-pad">
+                <div class="touch-btn btn-attack" id="btn-attack">⚔️</div>
+                <div class="touch-btn btn-jump" id="btn-jump">🦘</div>
+            </div>
+        </div>
+    </div>
+
+<script>
+// --- ضبط الشاشة (Auto-Fit) ---
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const GAME_WIDTH = 854; 
+const GAME_HEIGHT = 480;
+
+function resize() {
+    canvas.width = GAME_WIDTH;
+    canvas.height = GAME_HEIGHT;
+    const winW = window.innerWidth;
+    const winH = window.innerHeight;
+    const scale = Math.min(winW / GAME_WIDTH, winH / GAME_HEIGHT);
+    canvas.style.width = (GAME_WIDTH * scale) + "px";
+    canvas.style.height = (GAME_HEIGHT * scale) + "px";
+}
+
+window.addEventListener('resize', resize);
+window.addEventListener('orientationchange', () => setTimeout(resize, 200));
+window.addEventListener('load', resize);
+resize();
+
+// --- الصور ---
+const imgPlayerIdle = new Image(); imgPlayerIdle.src = 'https://i.ibb.co/C51RD9Rw/Picsart-25-12-19-15-11-32-150.png';
+const imgPlayerWalk = new Image(); imgPlayerWalk.src = 'https://i.ibb.co/MDm4QF09/Picsart-25-12-19-15-53-52-084.png';
+const imgPlayerAttack = new Image(); imgPlayerAttack.src = 'https://i.ibb.co/5XMnRD2X/Picsart-25-12-19-15-12-02-007.png';
+const imgPlayerJump = new Image(); imgPlayerJump.src = 'https://i.ibb.co/7JPpNM22/Picsart-25-12-19-15-24-07-683.png';
+const imgBackground = new Image(); imgBackground.src = 'https://i.ibb.co/sdV1ypzr/IMG-20251219-WA0004.jpg';
+const imgDragonIdle = new Image(); imgDragonIdle.src = 'https://i.ibb.co/FLt9bGmB/Picsart-25-12-19-16-08-46-542.png';
+const imgDragonAttack = new Image(); imgDragonAttack.src = 'https://i.ibb.co/mCpVFzT2/Picsart-25-12-19-16-09-13-478.png';
+const imgCastle = new Image(); imgCastle.src = 'https://i.ibb.co/PvntJfSZ/Picsart-25-12-19-17-35-11-904.png';
+
+// --- الأصوات ---
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+let isMuted = false;
+
+const Sound = {
+    playTone: (type, freq, dur, vol=0.1) => {
+        if(isMuted) return;
+        if(audioCtx.state === 'suspended') audioCtx.resume();
+        const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+        osc.type = type; osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + dur);
+        osc.connect(gain); gain.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + dur);
+    },
+    jump: () => Sound.playTone('square', 200, 0.1),
+    attack: () => Sound.playTone('sawtooth', 100, 0.1),
+    hitEnemy: () => Sound.playTone('square', 100, 0.1),
+    coin: () => Sound.playTone('sine', 1200, 0.2),
+    hurt: () => Sound.playTone('triangle', 80, 0.4),
+    fire: () => Sound.playTone('sawtooth', 50, 0.5, 0.2),
+    explosion: () => { Sound.playTone('sawtooth', 150, 0.1, 0.5); setTimeout(()=>Sound.playTone('square', 100, 0.2, 0.5), 100); },
+    win: () => { setTimeout(()=>Sound.playTone('square',400,0.3),0); setTimeout(()=>Sound.playTone('square',600,0.6),300); }
+};
+
+function toggleMute() {
+    isMuted = !isMuted;
+    document.getElementById('sound-btn').innerText = isMuted ? '🔇' : '🔊';
+}
+
+// --- نظام الحوار (Dialogue System) ---
+const dialogueStart = [
+    { name: "التنين الأسطوري", text: "لن تمر من هنا أيها الفارس الضعيف! 🔥", img: imgDragonIdle.src },
+    { name: "الفارس الشجاع", text: "سأهزمك وأحرر المملكة من شرك! ⚔️", img: imgPlayerIdle.src },
+    { name: "التنين الأسطوري", text: "سنرى... استعد للموت! هاهاها! 💀", img: imgDragonAttack.src }
+];
+
+const dialogueEnd = [
+    { name: "التنين الأسطوري", text: "مستحيل... قوتك تفوق الخيال! 😱", img: imgDragonIdle.src },
+    { name: "الفارس الشجاع", text: "الخير ينتصر دائمًا! ارحل الآن ولا تعد! ⚔️", img: imgPlayerIdle.src },
+    { name: "النظام", text: "✨ ظهرت القلعة! ادخلها لتفوز وتنهي المغامرة! ✨", img: imgCastle.src }
+];
+
+let currentDialogueData = [];
+let dialogueIndex = 0;
+let inDialogue = false;
+let dialogueCallback = null;
+
+function startDialogue(data, callback) {
+    inDialogue = true;
+    dialogueIndex = 0;
+    currentDialogueData = data;
+    dialogueCallback = callback;
+    document.getElementById('dialogue-box').style.display = 'flex';
+    document.getElementById('ui-layer').querySelector('.controls').style.display = 'none'; 
+    showDialogueLine();
+}
+
+function showDialogueLine() {
+    if (dialogueIndex >= currentDialogueData.length) {
+        endDialogue();
+        return;
+    }
+    const line = currentDialogueData[dialogueIndex];
+    document.getElementById('speaker-name').innerText = line.name;
+    document.getElementById('dialogue-text').innerText = line.text;
+    document.getElementById('speaker-img').src = line.img;
+}
+
+function nextDialogue() {
+    dialogueIndex++;
+    showDialogueLine();
+}
+
+function endDialogue() {
+    inDialogue = false;
+    document.getElementById('dialogue-box').style.display = 'none';
+    if(window.innerWidth < 1024) document.getElementById('ui-layer').querySelector('.controls').style.display = 'flex';
+    if (dialogueCallback) {
+        dialogueCallback();
+        dialogueCallback = null;
+    }
+}
+
+// --- متغيرات اللعبة ---
+let keys = { right: false, left: false, up: false, attack: false };
+const GRAVITY = 0.8; const FRICTION = 0.85; const PLAYER_SPEED = 6; const JUMP_FORCE = 17;
+let gameRunning = false; let isPaused = false;
+let score = 0; let cameraX = 0; let currentLevel = 1; const MAX_LEVELS = 10;
+
+// --- الكلاسات ---
+class Particle {
+    constructor(x, y, color) {
+        this.x = x; this.y = y;
+        this.size = Math.random() * 15 + 5;
+        this.speedX = (Math.random() - 0.5) * 10;
+        this.speedY = (Math.random() - 0.5) * 10;
+        this.color = color;
+        this.life = 100;
+    }
+    update() {
+        this.x += this.speedX;
+        this.y += this.speedY;
+        this.speedY += 0.5; // Gravity
+        this.life -= 2;
+        this.size *= 0.95;
+    }
+    draw(ctx, cx) {
+        ctx.fillStyle = this.color;
+        ctx.globalAlpha = this.life / 100;
+        ctx.fillRect(this.x - cx, this.y, this.size, this.size);
+        ctx.globalAlpha = 1;
+    }
+}
+
+class Player {
+    constructor() {
+        this.width = 80; this.height = 90; this.x = 50; this.y = 200;
+        this.velX = 0; this.velY = 0; this.jumping = false; this.grounded = false;
+        this.facingRight = true; this.attacking = false; this.attackTimer = 0;
+        this.health = 3; this.invulnerable = 0; this.spawnX = 50; this.spawnY = 200;
+        this.onMovingPlatform = null;
+    }
+    update() {
+        if (keys.right) { if(this.velX < PLAYER_SPEED) this.velX++; this.facingRight = true; }
+        if (keys.left) { if(this.velX > -PLAYER_SPEED) this.velX--; this.facingRight = false; }
+        this.velX *= FRICTION;
+        
+        if (keys.up && !this.jumping && this.grounded) { 
+            this.jumping = true; 
+            this.grounded = false; 
+            this.velY = -JUMP_FORCE; 
+            this.onMovingPlatform = null;
+            Sound.jump(); 
+        }
+
+        this.velY += GRAVITY; 
+        
+        if (this.onMovingPlatform) {
+            this.x += this.onMovingPlatform.dx;
+            this.y += this.onMovingPlatform.dy;
+        }
+
+        this.x += this.velX; 
+        this.y += this.velY;
+        
+        if (keys.attack && this.attackTimer === 0) { this.attacking = true; this.attackTimer = 15; Sound.attack(); }
+        if (this.attackTimer > 0) { this.attackTimer--; if(this.attackTimer===0) this.attacking = false; }
+        if (this.invulnerable > 0) this.invulnerable--;
+        if (this.y > GAME_HEIGHT + 100) this.respawn();
+    }
+    respawn() {
+        if (this.health > 1) { this.health--; Sound.hurt(); this.x = this.spawnX; this.y = this.spawnY; this.velX = 0; this.velY = 0; cameraX = 0; this.invulnerable = 60; this.onMovingPlatform = null; } else { this.health = 0; gameOver(); }
+    }
+    takeDamage() {
+        if (this.invulnerable > 0) return;
+        this.health--; Sound.hurt(); this.invulnerable = 60; this.velY = -8; this.velX = this.facingRight ? -10 : 10;
+        this.onMovingPlatform = null;
+        if (this.health <= 0) gameOver();
+    }
+    draw(ctx, camX) {
+        if (this.invulnerable > 0 && Math.floor(Date.now()/100)%2===0) return;
+        ctx.save();
+        let drawX = this.x - camX;
+        if (!this.facingRight) { ctx.scale(-1, 1); drawX = -(this.x - camX) - this.width; }
+        let img = imgPlayerIdle;
+        if (this.attacking) { img = imgPlayerAttack; let atkW = this.width * 1.3; let atkX = this.facingRight ? drawX : drawX - (atkW - this.width); ctx.drawImage(img, atkX, this.y, atkW, this.height); } 
+        else { if (this.jumping || !this.grounded) img = imgPlayerJump; else if (Math.abs(this.velX) > 0.5) img = imgPlayerWalk; ctx.drawImage(img, drawX, this.y, this.width, this.height); }
+        ctx.restore();
+    }
+}
+
+class Platform {
+    constructor(x, y, w, h, t='normal', moveRange=0, speed=0, axis='x') { 
+        this.x=x; this.y=y; this.width=w; this.height=h; this.type=t; 
+        this.startX = x; this.startY = y;
+        this.moveRange = moveRange; 
+        this.speed = speed;
+        this.axis = axis;
+        this.dir = 1;
+        this.dx = 0; this.dy = 0;
+    }
+
+    update() {
+        if (this.type === 'moving') {
+            if (this.axis === 'x') {
+                this.dx = this.speed * this.dir;
+                this.x += this.dx;
+                if (this.x > this.startX + this.moveRange || this.x < this.startX) { this.dir *= -1; }
+            } else if (this.axis === 'y') {
+                this.dy = this.speed * this.dir;
+                this.y += this.dy;
+                if (this.y > this.startY + this.moveRange || this.y < this.startY - this.moveRange) { this.dir *= -1; }
+            }
+        }
+    }
+
+    draw(ctx, cx) {
+        if (this.type==='finish') {
+            ctx.fillStyle='#4CAF50'; ctx.fillRect(this.x-cx, this.y, 10, this.height);
+            ctx.fillStyle='#FFF'; ctx.beginPath(); ctx.moveTo(this.x-cx+10, this.y); ctx.lineTo(this.x-cx+50, this.y+20); ctx.lineTo(this.x-cx+10, this.y+40); ctx.fill();
+        } else if (this.type === 'castle') {
+            ctx.drawImage(imgCastle, this.x - cx, this.y - 120, 300, 300); 
+        } else {
+            let colorMain = '#3E2723';
+            let colorTop = '#2E7D32';
+            
+            if (this.type === 'moving') {
+                colorMain = '#5D4037';
+                colorTop = '#FF9800'; 
+            }
+
+            ctx.fillStyle = colorMain; 
+            ctx.fillRect(this.x-cx, this.y, this.width, this.height);
+            ctx.fillStyle = colorTop; 
+            ctx.fillRect(this.x-cx, this.y, this.width, 15);
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(this.x-cx, this.y, this.width, this.height);
+        }
+    }
+}
+
+class Enemy {
+    constructor(x, y, range, hp = 1) {
+        this.x = x; this.y = y; this.width = 40; this.height = 40; this.startX = x; this.range = range; this.hp = hp; this.maxHp = hp; this.speed = 2; this.dir = 1; this.dead = false; this.flashTimer = 0;
+    }
+    update() {
+        if (this.dead) return; this.x += this.speed * this.dir; if (this.x > this.startX + this.range || this.x < this.startX) this.dir *= -1; if (this.flashTimer > 0) this.flashTimer--;
+    }
+    hit() { this.hp--; this.flashTimer = 10; Sound.hitEnemy(); if (this.hp <= 0) this.dead = true; }
+    draw(ctx, cx) {
+        if (this.dead) return;
+        ctx.fillStyle = this.maxHp > 1 ? '#8B0000' : '#D32F2F'; if (this.flashTimer > 0) ctx.fillStyle = '#FFF';
+        ctx.beginPath(); ctx.arc(this.x-cx+20, this.y+20, 20, Math.PI, 0); ctx.fillRect(this.x-cx, this.y+20, 40, 20); ctx.fill();
+        ctx.fillStyle='white'; ctx.fillRect(this.x-cx+10, this.y+15, 8, 8); ctx.fillRect(this.x-cx+22, this.y+15, 8, 8);
+        if (this.maxHp > 1) { ctx.fillStyle = '#FFD700'; ctx.beginPath(); ctx.moveTo(this.x-cx+10, this.y); ctx.lineTo(this.x-cx+15, this.y+10); ctx.lineTo(this.x-cx+5, this.y+10); ctx.fill(); ctx.beginPath(); ctx.moveTo(this.x-cx+30, this.y); ctx.lineTo(this.x-cx+35, this.y+10); ctx.lineTo(this.x-cx+25, this.y+10); ctx.fill(); }
+    }
+}
+
+class Fireball {
+    constructor(x, y, dx, dy) { this.x = x; this.y = y; this.dx = dx; this.dy = dy; this.size = 20; this.active = true; }
+    update() { this.x += this.dx; this.y += this.dy; if (this.x < -100 || this.x > 3000 || this.y > GAME_HEIGHT) this.active = false; }
+    draw(ctx, cx) { ctx.fillStyle = '#FF4500'; ctx.beginPath(); ctx.arc(this.x - cx, this.y, this.size, 0, Math.PI*2); ctx.fill(); ctx.fillStyle = '#FFFF00'; ctx.beginPath(); ctx.arc(this.x - cx, this.y, this.size/2, 0, Math.PI*2); ctx.fill(); }
+}
+
+class Dragon {
+    constructor(x, y) {
+        this.x = x; this.y = y; this.width = 250; this.height = 200; this.hp = 30; this.maxHp = 30;
+        this.state = 'idle'; 
+        this.cooldown = 250; this.attackTimer = this.cooldown; 
+        this.hoverOffset = 0; this.dead = false; this.flashTimer = 0;
+    }
+    update() {
+        if (this.dead) return;
+        this.hoverOffset = Math.sin(Date.now() / 300) * 20;
+        if (this.attackTimer > 0) {
+            this.attackTimer--;
+            if (this.attackTimer < 60 && this.state !== 'attack') { this.state = 'attack'; }
+        } else {
+            Sound.fire();
+            let targetX = player.x + player.width/2; let targetY = player.y + player.height/2;
+            let angle = Math.atan2(targetY - (this.y + 100), targetX - (this.x + 50)); let speed = 7;
+            fireballs.push(new Fireball(this.x + 50, this.y + 100, Math.cos(angle)*speed, Math.sin(angle)*speed));
+            this.attackTimer = this.cooldown; this.state = 'idle';
+        }
+        if (this.flashTimer > 0) this.flashTimer--;
+    }
+    hit() {
+        this.hp--; this.flashTimer = 10;
+        if (this.hp <= 0) { 
+            this.dead = true; 
+            Sound.explosion();
+            for(let i=0; i<30; i++) {
+                particles.push(new Particle(this.x + this.width/2, this.y + this.height/2, Math.random()>0.5 ? '#ff0000' : '#ffaa00'));
+            }
+            startDialogue(dialogueEnd, spawnCastle);
+        }
+    }
+    draw(ctx, cx) {
+        if (this.dead) return;
+        ctx.save(); let drawY = this.y + this.hoverOffset; if (this.flashTimer > 0) ctx.globalAlpha = 0.5;
+        let img = this.state === 'attack' ? imgDragonAttack : imgDragonIdle;
+        ctx.drawImage(img, this.x - cx, drawY, this.width, this.height); ctx.restore();
+    }
+}
+
+class Coin {
+    constructor(x, y) { this.x = x; this.y = y; this.width = 25; this.height = 25; this.collected = false; this.angle = 0; }
+    update() { this.angle += 0.1; }
+    draw(ctx, cx) { if (this.collected) return; let floatY = Math.sin(this.angle) * 5; ctx.fillStyle = '#FFD700'; ctx.beginPath(); ctx.arc(this.x - cx + 12, this.y + 12 + floatY, 10, 0, Math.PI * 2); ctx.fill(); ctx.strokeStyle = '#FFF'; ctx.lineWidth = 2; ctx.stroke(); }
+}
+
+// --- إدارة المراحل والمنطق ---
+let player; let platforms = []; let enemies = []; let coins = []; let fireballs = []; let particles = []; let boss = null;
+
+function loadLevel(levelNum) {
+    player = new Player(); player.health = 3; platforms = []; enemies = []; coins = []; fireballs = []; particles = []; boss = null; cameraX = 0;
+    document.getElementById('boss-hud').style.display = 'none';
+    const gY = GAME_HEIGHT - 80; // مستوى الأرض
+    
+    // أرضية البداية ثابتة
+    platforms.push(new Platform(0, gY, 300, 100));
+
+    if (levelNum === 10) {
+        document.getElementById('boss-hud').style.display = 'flex';
+        platforms.push(new Platform(300, gY, 1200, 100));
+        boss = new Dragon(1100, 100);
+    } else {
+        // --- خوارزمية إنشاء المنصات "الآمنة" ---
+        let platCount = 6 + levelNum; 
+        let lastPlatX = 300;
+        let lastPlatY = gY;
+        
+        // المستويات المتاحة (Grid Tiers)
+        const TIER_1 = gY - 120; // ارتفاع 1
+        const TIER_2 = gY - 240; // ارتفاع 2 (أقصى ارتفاع)
+
+        for (let i = 0; i < platCount; i++) {
+            // تحديد الارتفاع القادم بناءً على الحالي (لتجنب القفزات المستحيلة)
+            let nextY;
+            
+            // قاعدة القفز: لا يمكن الصعود أكثر من 120 بكسل (Tier واحد)
+            // الاحتمالات: نفس المستوى، مستوى أعلى بواحد، أو النزول لأي مستوى
+            let possibleY = [lastPlatY]; // البقاء في نفس المستوى
+            if (lastPlatY > TIER_2) possibleY.push(lastPlatY - 120); // الصعود درجة
+            if (lastPlatY < gY) possibleY.push(lastPlatY + 120); // النزول درجة
+            if (lastPlatY === TIER_2) possibleY.push(gY); // نزول كامل للأرض (ممكن)
+
+            nextY = possibleY[Math.floor(Math.random() * possibleY.length)];
+            
+            // تحديد المسافة الأفقية (Gap)
+            let minGap = 50; 
+            let maxGap = 160; // أقصى قفزة آمنة أفقياً
+            // لو صاعدين لفوق، نقلل المسافة عشان تكون أسهل
+            if (nextY < lastPlatY) maxGap = 110; 
+            
+            let gap = minGap + Math.random() * (maxGap - minGap);
+            let currentX = lastPlatX + gap;
+
+            let platW = 150 + Math.random() * 80;
+            let platH = (nextY === gY) ? 100 : 40;
+
+            // تحديد نوع المنصة (ثابتة أو متحركة)
+            let isMoving = (levelNum > 2 && i % 4 === 0);
+            
+            if (isMoving) {
+                let moveType = Math.random() > 0.5 ? 'x' : 'y';
+                platforms.push(new Platform(currentX, nextY, 120, 25, 'moving', 100, 1.5, moveType));
+                lastPlatX = currentX + 120; // تحديث X لآخر منصة
+                lastPlatY = nextY;
+            } else {
+                platforms.push(new Platform(currentX, nextY, platW, platH));
+                lastPlatX = currentX + platW;
+                lastPlatY = nextY;
+
+                // إضافة عناصر اللعب
+                if (Math.random() < 0.4) {
+                    enemies.push(new Enemy(currentX + 40, nextY - 40, platW - 80));
+                }
+                if (Math.random() < 0.5) {
+                    coins.push(new Coin(currentX + platW/2, nextY - 50));
+                }
+            }
+        }
+        
+        // منصة النهاية
+        lastPlatX += 120;
+        platforms.push(new Platform(lastPlatX, gY, 300, 100));
+        platforms.push(new Platform(lastPlatX + 150, gY - 80, 20, 80, 'finish'));
+    }
+}
+
+function spawnCastle() {
+    platforms.push(new Platform(1100, GAME_HEIGHT - 80, 200, 200, 'castle'));
+    Sound.win();
+}
+
+function checkCollisions() {
+    player.grounded = false;
+    if (player.onMovingPlatform) {
+         let p = player.onMovingPlatform;
+         if (!(player.x < p.x + p.width && player.x + player.width > p.x && player.y + player.height <= p.y + p.height + 5)) {
+             player.onMovingPlatform = null;
+         }
+    }
+
+    for (let p of platforms) {
+        if (p.type === 'castle') {
+            if (player.x < p.x + 150 && player.x + player.width > p.x && player.y < p.y + 200) {
+                 winGame(); return; 
+            }
+            continue; 
+        }
+
+        if (player.x < p.x + p.width && player.x + player.width > p.x && player.y < p.y + p.height && player.y + player.height > p.y) {
+            if (p.type === 'finish') { finishLevel(); return; }
+
+            if (player.velY > 0 && player.y + player.height - player.velY <= p.y + 20) { 
+                player.grounded = true; 
+                player.velY = 0; 
+                player.y = p.y - player.height; 
+                player.jumping = false;
+                if (p.type === 'moving') player.onMovingPlatform = p;
+                else player.onMovingPlatform = null;
+            } 
+            else if (player.velY < 0 && player.y - player.velY >= p.y + p.height) { player.velY = 0; player.y = p.y + p.height; }
+        }
+    }
+    for (let e of enemies) {
+        if (!e.dead && player.x < e.x + e.width && player.x + player.width > e.x && player.y < e.y + e.height && player.y + player.height > e.y) {
+            let hitEnemy = false;
+            if (player.attacking) { let range = 80; let inRange = player.facingRight ? (player.x + player.width + range > e.x) : (player.x - range < e.x + e.width); if (inRange) { e.hit(); hitEnemy = true; } }
+            if (!hitEnemy) player.takeDamage();
+        }
+    }
+    for (let f of fireballs) { if (f.active && player.x < f.x + f.size && player.x + player.width > f.x - f.size && player.y < f.y + f.size && player.y + player.height > f.y - f.size) { player.takeDamage(); f.active = false; } }
+    if (boss && !boss.dead) {
+        if (player.attacking) { let range = 80; let inRange = player.facingRight ? (player.x + player.width + range > boss.x) : (player.x - range < boss.x + boss.width); if (inRange && player.y < boss.y + boss.height && player.y + player.height > boss.y) { if (boss.flashTimer === 0) { boss.hit(); Sound.hitEnemy(); } } }
+        if (player.x < boss.x + boss.width - 50 && player.x + player.width > boss.x + 50 && player.y < boss.y + boss.height - 50 && player.y + player.height > boss.y + 50) { player.takeDamage(); }
+    }
+    for (let c of coins) { if (!c.collected && player.x < c.x + c.width && player.x + player.width > c.x && player.y < c.y + c.height && player.y + player.height > c.y) { c.collected = true; score += 10; Sound.coin(); } }
+}
+
+function update() {
+    if (!gameRunning || isPaused || inDialogue) return;
+    platforms.forEach(p => p.update());
+    player.update();
+    let targetCamX = player.x - GAME_WIDTH / 3; cameraX += (targetCamX - cameraX) * 0.1; if (cameraX < 0) cameraX = 0;
+    if (currentLevel === 10 && cameraX > 800) cameraX = 800;
+    enemies.forEach(e => e.update()); 
+    coins.forEach(c => c.update()); 
+    fireballs.forEach(f => f.update()); 
+    particles.forEach((p, index) => {
+        p.update();
+        if (p.life <= 0) particles.splice(index, 1);
+    });
+    if (boss) boss.update();
+    checkCollisions(); updateUI();
+}
+function draw() {
+    ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT); ctx.drawImage(imgBackground, 0, 0, GAME_WIDTH, GAME_HEIGHT);
+    ctx.save(); 
+    platforms.forEach(p => p.draw(ctx, cameraX)); 
+    coins.forEach(c => c.draw(ctx, cameraX)); 
+    enemies.forEach(e => e.draw(ctx, cameraX)); 
+    fireballs.forEach(f => f.draw(ctx, cameraX)); 
+    particles.forEach(p => p.draw(ctx, cameraX));
+    if (boss) boss.draw(ctx, cameraX); 
+    player.draw(ctx, cameraX); 
+    ctx.restore();
+}
+function gameLoop() { 
+    if (!gameRunning) return;
+    if (!isPaused && !inDialogue) update(); 
+    draw(); 
+    requestAnimationFrame(gameLoop); 
+}
+function updateUI() {
+    document.getElementById('score-display').innerText = ` ${score} 💰`; 
+    document.getElementById('level-display').innerText = `م: ${currentLevel}`; 
+    document.getElementById('health-display').innerText = '❤️'.repeat(Math.max(0, player.health));
+    if (boss) { let pct = (boss.hp / boss.maxHp) * 100; document.getElementById('boss-health-fill').style.width = pct + '%'; }
+}
+
+function showMainMenu() {
+    document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+    document.getElementById('main-menu').classList.remove('hidden');
+    isPaused = false; document.getElementById('pause-menu').classList.add('hidden');
+    document.getElementById('dialogue-box').style.display = 'none';
+    gameRunning = false;
+}
+
+function showMapScreen() {
+    document.getElementById('main-menu').classList.add('hidden');
+    document.getElementById('map-screen').classList.remove('hidden');
+}
+
+function togglePause() {
+    if (!gameRunning || inDialogue) return;
+    isPaused = !isPaused;
+    const pauseMenu = document.getElementById('pause-menu');
+    const pauseBtn = document.getElementById('pause-btn');
+    if (isPaused) {
+        pauseMenu.classList.remove('hidden');
+        pauseBtn.innerText = '▶️';
+    } else {
+        pauseMenu.classList.add('hidden');
+        pauseBtn.innerText = '⏸️';
+        gameLoop();
+    }
+}
+
+function startGame(level) {
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    if (level === 1) score = 0; 
+    currentLevel = level; 
+    loadLevel(currentLevel);
+    document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden')); 
+    document.getElementById('pause-menu').classList.add('hidden'); isPaused = false;
+    document.getElementById('ui-layer').classList.remove('hidden');
+    document.getElementById('pause-btn').innerText = '⏸️';
+    gameRunning = true; 
+    
+    if (level === 1) {
+        startDialogue(dialogueStart, null);
+    }
+    
+    gameLoop();
+}
+
+function nextLevel() { currentLevel++; if (currentLevel > MAX_LEVELS) return; loadLevel(currentLevel); document.getElementById('level-screen').classList.add('hidden'); gameRunning = true; gameLoop(); }
+function finishLevel() { gameRunning = false; Sound.win(); document.getElementById('level-msg').innerText = `أنهيت المرحلة ${currentLevel}!`; document.getElementById('level-screen').classList.remove('hidden'); }
+function winGame() { gameRunning = false; Sound.win(); document.getElementById('win-screen').classList.remove('hidden'); }
+function gameOver() { gameRunning = false; document.getElementById('game-over-screen').classList.remove('hidden'); }
+function returnToMenu() { showMainMenu(); }
+
+window.addEventListener('keydown', (e) => { 
+    if (isPaused || inDialogue) return;
+    if(e.key==='ArrowRight')keys.right=true; if(e.key==='ArrowLeft')keys.left=true; if(e.key==='ArrowUp'||e.key===' ')keys.up=true; if(e.key==='z'||e.key==='Z')keys.attack=true; 
+});
+window.addEventListener('keyup', (e) => { 
+    if(e.key==='ArrowRight')keys.right=false; if(e.key==='ArrowLeft')keys.left=false; if(e.key==='ArrowUp'||e.key===' ')keys.up=false; if(e.key==='z'||e.key==='Z')keys.attack=false; 
+});
+
+function setupTouch(id, key) { 
+    const btn=document.getElementById(id); 
+    const press=(e)=>{
+        if (isPaused || inDialogue) return;
+        e.preventDefault();keys[key]=true;btn.classList.add('pressed');
+    }; 
+    const release=(e)=>{
+        e.preventDefault();keys[key]=false;btn.classList.remove('pressed');
+    }; 
+    btn.addEventListener('touchstart',press); btn.addEventListener('touchend',release); btn.addEventListener('mousedown',press); btn.addEventListener('mouseup',release); btn.addEventListener('mouseleave',release); 
+}
+setupTouch('btn-left','left'); setupTouch('btn-right','right'); setupTouch('btn-jump','up'); setupTouch('btn-attack','attack');
+
+showMainMenu();
+
+</script>
+</body>
+</html>
+
+
